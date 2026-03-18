@@ -9,6 +9,28 @@ let currentProfileId = null;
 
 const DEFAULT_PICTURE = "resources/default.png";
 
+function resolvePicturePath(input) {
+  let value = input.trim();
+
+  if (!value) return DEFAULT_PICTURE;
+
+  if (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("resources/") ||
+    value.startsWith("./") ||
+    value.startsWith("../")
+  ) {
+    return value;
+  }
+
+  if (!value.includes(".")) {
+    value += ".png";
+  }
+
+  return `resources/${value}`;
+}
+
 function setStatus(message, isError = false) {
   const messageEl = document.getElementById("status-message");
   const footerEl = document.getElementById("status-bar");
@@ -310,12 +332,14 @@ async function changePicture() {
   }
 
   const input = document.getElementById("input-picture");
-  const newPicture = input.value.trim();
+  const rawPicture = input.value.trim();
 
-  if (!newPicture) {
+  if (!rawPicture) {
     setStatus("Error: Picture field is empty.", true);
     return;
   }
+
+  const newPicture = resolvePicturePath(rawPicture);
 
   try {
     const { error } = await db
@@ -328,9 +352,11 @@ async function changePicture() {
     document.getElementById("profile-pic").src = newPicture;
     input.value = "";
     await loadProfileList();
+
     document.querySelectorAll("#profile-list .profile-item").forEach((item) => {
       item.classList.toggle("active", item.dataset.id === currentProfileId);
     });
+
     setStatus("Picture updated.");
   } catch (err) {
     setStatus(`Error updating picture: ${err.message}`, true);

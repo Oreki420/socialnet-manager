@@ -15,18 +15,19 @@
   --clr-status-bg: #17345f;
   --clr-status-text: #f4f7fb;
 
-  --header-h: 88px;
-  --statusbar-h: 48px;
   --radius-lg: 18px;
 }
 
 html,
 body {
   height: 100%;
+  margin: 0;
 }
 
 body {
-  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--clr-page-bg);
   font-family: var(--font-body);
   color: #1d2735;
@@ -37,17 +38,28 @@ body {
   color: var(--clr-header-text);
 }
 
+#app-header .container-fluid {
+  display: flex;
+  justify-content: center;
+}
+
 #app-title {
   font-family: var(--font-heading);
   font-size: 1.75rem;
   font-weight: 700;
   letter-spacing: 0.2px;
+  text-align: center;
 }
 
 #app-wrapper {
-  min-height: calc(100vh - var(--header-h));
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+main {
+  flex: 1;
 }
 
 .sn-panel {
@@ -149,13 +161,15 @@ body {
 #status-bar {
   background: var(--clr-status-bg);
   color: var(--clr-status-text);
-  min-height: var(--statusbar-h);
+  min-height: 48px;
   display: flex;
   align-items: center;
   padding: 0.75rem 1rem;
   font-size: 0.9rem;
   font-style: italic;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 @media (max-width: 991.98px) {
