@@ -7,29 +7,12 @@ const db = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 let currentProfileId = null;
 
-const DEFAULT_PICTURE = "resources/default.png";
-
-function resolvePicturePath(input) {
-  let value = input.trim();
-
-  if (!value) return DEFAULT_PICTURE;
-
-  if (
-    value.startsWith("http://") ||
-    value.startsWith("https://") ||
-    value.startsWith("resources/") ||
-    value.startsWith("./") ||
-    value.startsWith("../")
-  ) {
-    return value;
-  }
-
-  if (!value.includes(".")) {
-    value += ".png";
-  }
-
-  return `resources/${value}`;
-}
+/*
+  Replace this after batch-uploading your default avatar to Vercel Blob.
+  While testing locally before Blob migration, you may temporarily use:
+  "resources/images/default.png"
+*/
+const DEFAULT_AVATAR = "resources/images/default.png";
 
 function setStatus(message, isError = false) {
   const messageEl = document.getElementById("status-message");
@@ -43,7 +26,7 @@ function setStatus(message, isError = false) {
 function clearCentrePanel() {
   currentProfileId = null;
 
-  document.getElementById("profile-pic").src = DEFAULT_PICTURE;
+  document.getElementById("profile-pic").src = DEFAULT_AVATAR;
   document.getElementById("profile-name").textContent = "No Profile Selected";
   document.getElementById("profile-status").textContent = "—";
   document.getElementById("profile-quote").textContent = "—";
@@ -57,7 +40,7 @@ function clearCentrePanel() {
 function displayProfile(profile, friendNames) {
   currentProfileId = profile.id;
 
-  document.getElementById("profile-pic").src = profile.picture || DEFAULT_PICTURE;
+  document.getElementById("profile-pic").src = profile.picture || DEFAULT_AVATAR;
   document.getElementById("profile-name").textContent = profile.name;
   document.getElementById("profile-status").textContent = profile.status?.trim() || "No status set.";
   document.getElementById("profile-quote").textContent = profile.quote?.trim() || "No quote set.";
@@ -76,6 +59,28 @@ function displayProfile(profile, friendNames) {
     div.textContent = name;
     friendsList.appendChild(div);
   });
+}
+
+function resolvePicturePath(input) {
+  let value = input.trim();
+
+  if (!value) return DEFAULT_AVATAR;
+
+  if (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("resources/") ||
+    value.startsWith("./") ||
+    value.startsWith("../")
+  ) {
+    return value;
+  }
+
+  if (!value.includes(".")) {
+    value += ".png";
+  }
+
+  return `resources/images/${value}`;
 }
 
 async function loadProfileList() {
@@ -101,7 +106,7 @@ async function loadProfileList() {
       item.dataset.id = profile.id;
 
       const img = document.createElement("img");
-      img.src = profile.picture || DEFAULT_PICTURE;
+      img.src = profile.picture || DEFAULT_AVATAR;
       img.alt = `${profile.name} picture`;
 
       const name = document.createElement("span");
@@ -183,7 +188,7 @@ async function addProfile() {
         name,
         status: "",
         quote: "",
-        picture: DEFAULT_PICTURE
+        picture: DEFAULT_AVATAR
       })
       .select()
       .single();
@@ -363,6 +368,75 @@ async function changePicture() {
   }
 }
 
+function diagnoseUploadStatus(status) {
+  if (status === 404) return "Upload endpoint not found. Check api/upload-avatar.js and Vercel Root Directory.";
+  if (status === 413) return "File is too large.";
+  if (status === 415) return "Unsupported file type. Please upload an image.";
+  if (status === 500) return "Server upload function crashed.";
+  return "Upload failed.";
+}
+
+async function uploadPictureFile() {
+  if (!currentProfileId) {
+    setStatus("Error: No profile is selected.", true);
+    return;
+  }
+
+  const fileInput = document.getElementById("input-picture-file");
+  const file = fileInput.files[0];
+
+  if (!file) {
+    setStatus("Error: Please choose an image file first.", true);
+    return;
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append("avatar", file);
+
+    const response = await fetch("/api/upload-avatar", {
+      method: "POST",
+      body: formData
+    });
+
+    const rawText = await response.text();
+    let result;
+
+    try {
+      result = JSON.parse(rawText);
+    } catch {
+      const preview = rawText.slice(0, 200).replace(/\s+/g, " ").trim();
+      const hint = diagnoseUploadStatus(response.status);
+      throw new Error(`HTTP ${response.status} (not JSON). ${hint} | Response: "${preview}"`);
+    }
+
+    if (!response.ok) {
+      throw new Error(result.error || diagnoseUploadStatus(response.status));
+    }
+
+    const uploadedUrl = result.url;
+
+    const { error } = await db
+      .from("profiles")
+      .update({ picture: uploadedUrl })
+      .eq("id", currentProfileId);
+
+    if (error) throw error;
+
+    document.getElementById("profile-pic").src = uploadedUrl;
+    fileInput.value = "";
+    await loadProfileList();
+
+    document.querySelectorAll("#profile-list .profile-item").forEach((item) => {
+      item.classList.toggle("active", item.dataset.id === currentProfileId);
+    });
+
+    setStatus("Picture uploaded successfully.");
+  } catch (err) {
+    setStatus(`Error uploading picture: ${err.message}`, true);
+  }
+}
+
 function normalizeFriendPair(idA, idB) {
   return idA < idB ? [idA, idB] : [idB, idA];
 }
@@ -488,6 +562,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-status").addEventListener("click", changeStatus);
   document.getElementById("btn-quote").addEventListener("click", changeQuote);
   document.getElementById("btn-picture").addEventListener("click", changePicture);
+  document.getElementById("btn-upload-picture").addEventListener("click", uploadPictureFile);
   document.getElementById("btn-add-friend").addEventListener("click", addFriend);
   document.getElementById("btn-remove-friend").addEventListener("click", removeFriend);
   document.getElementById("btn-exit").addEventListener("click", exitCurrentProfile);
